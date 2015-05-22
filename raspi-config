@@ -74,6 +74,7 @@ p
 $PART_NUM
 $PART_START
 
+
 p
 w
 EOF
@@ -97,7 +98,12 @@ cat <<\EOF > /etc/init.d/resize2fs_once &&
 case "$1" in
   start)
     log_daemon_msg "Starting resize2fs_once" &&
-    resize2fs /dev/disk/by-label/root &&
+    # must force fsck bevor resize2fs
+    log_daemon_msg "Checking filesystem..." &&
+    /sbin/fsck.ext4 -f  /dev/mmcblk0p2 &&
+    sync &&
+    sleep 2 &&
+    resize2fs /dev/mmcblk0p2 &&
     rm /etc/init.d/resize2fs_once &&
     update-rc.d resize2fs_once remove &&
     log_end_msg $?
