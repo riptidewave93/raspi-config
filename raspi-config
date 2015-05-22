@@ -88,11 +88,7 @@ cat <<\EOF > /usr/lib/systemd/scripts/resize2fs_once &&
 case "$1" in
   start)
     echo "Starting resize2fs_once"
-    # must force fsck bevor resize2fs
-    echo "Checking filesystem..."
-    /sbin/fsck.ext4 -f /dev/mmcblk0p2
-    sync && sleep 2
-    resize2fs /dev/mmcblk0p2
+    resize2fs -f /dev/mmcblk0p2
     systemctl disable resize2fs_once.service
     rm /usr/lib/systemd/scripts/resize2fs_once && rm /usr/lib/systemd/system/resize2fs_once.service
     ;;
@@ -106,14 +102,16 @@ EOF
 # now set up a systemd script
 cat <<\EOF > /usr/lib/systemd/system/resize2fs_once.service &&
 [Unit]
-Description=Resize the root-partition oneshot
-DefaultDependencies=False
-Before=sysinit.target
-After=initrd.target
+Description=Rootfs Rezise oneshot
+DefaultDependencies=no
+After=local-fs.target
 
 [Service]
+Type=oneshot
+RemainAfterExit=yes
 ExecStart=/usr/lib/systemd/scripts/resize2fs_once start
-Type=simple
+StandardOutput=journal+console
+TimeoutSec=0
 
 [Install]
 WantedBy=multi-user.target
