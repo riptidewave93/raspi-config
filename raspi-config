@@ -77,35 +77,24 @@ $PART_START
 p
 w
 EOF
-  ASK_TO_REBOOT=1
 
-  # now set up an init.d script
-cat <<\EOF > /etc/init.d/resize2fs_once &&
+  # Create systemd containment folders
+  mkdir /usr/lib/systemd/system
+  mkdir /usr/lib/systemd/scripts
+
+# Create the resize script
+cat <<\EOF > /usr/lib/systemd/scripts/resize2fs_once &&
 #!/bin/sh
-### BEGIN INIT INFO
-# Provides:          resize2fs_once
-# Required-Start:
-# Required-Stop:
-# Default-Start: 2 3 4 5 S
-# Default-Stop:
-# Short-Description: Resize the root filesystem to fill partition
-# Description:
-### END INIT INFO
-
-. /lib/lsb/init-functions
-
 case "$1" in
   start)
-    log_daemon_msg "Starting resize2fs_once" &&
+    echo "Starting resize2fs_once"
     # must force fsck bevor resize2fs
-    log_daemon_msg "Checking filesystem..." &&
-    /sbin/fsck.ext4 -f  /dev/mmcblk0p2 &&
-    sync &&
-    sleep 2 &&
-    resize2fs /dev/mmcblk0p2 &&
-    rm /etc/init.d/resize2fs_once &&
-    update-rc.d resize2fs_once remove &&
-    log_end_msg $?
+    echo "Checking filesystem..."
+    /sbin/fsck.ext4 -f /dev/mmcblk0p2
+    sync && sleep 2
+    resize2fs /dev/mmcblk0p2
+    systemctl disable resize2fs_once.service
+    rm /usr/lib/systemd/scripts/resize2fs_once && rm /usr/lib/systemd/system/resize2fs_once.service
     ;;
   *)
     echo "Usage: $0 start" >&2
@@ -113,8 +102,26 @@ case "$1" in
     ;;
 esac
 EOF
-  chmod +x /etc/init.d/resize2fs_once &&
-  update-rc.d resize2fs_once defaults &&
+
+# now set up a systemd script
+cat <<\EOF > /usr/lib/systemd/system/resize2fs_once.service &&
+[Unit]
+Description=Resize the root-partition oneshot
+DefaultDependencies=False
+Before=sysinit.target
+After=initrd.target
+
+[Service]
+ExecStart=/usr/lib/systemd/scripts/resize2fs_once start
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  chmod +x /usr/lib/systemd/scripts/resize2fs_once
+  systemctl enable resize2fs_once.service
+  ASK_TO_REBOOT=1
   if [ "$INTERACTIVE" = True ]; then
     whiptail --msgbox "Root partition has been resized.\nThe filesystem will be enlarged upon the next reboot" 20 60 2
   fi
